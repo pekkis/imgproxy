@@ -1,17 +1,27 @@
 services:
-  thumbor:
-    image: ghcr.io/imgproxy/imgproxy:v3.30.0
-    restart: always
-    networks:
-      - thumbor
-
-    ports:
-      - 5007:8080
-
+  imgproxy:
+    # Pinned by version and digest: upgrades happen when we decide (Dependabot proposes them).
+    image: ghcr.io/imgproxy/imgproxy:v4.0.19@sha256:bfe6737804adccdc05325ea4e11ba95dd6242ee7aa79a0a041174cc5160f8e8d
+    restart: unless-stopped
     environment:
       - IMGPROXY_KEY=${IMGPROXY_KEY}
       - IMGPROXY_SALT=${IMGPROXY_SALT}
-
-networks:
-  thumbor:
-    driver: bridge
+      # Only the CMS's images: signed URLs already stop strangers, this stops a leaked key
+      # from turning us into an open proxy (or a way into other hosts).
+      - IMGPROXY_ALLOWED_SOURCES=https://cms.pekkis.eu/
+    # Caddy proxies to it; Docker bypasses ufw, so bind to localhost only.
+    ports:
+      - "127.0.0.1:5007:8080"
+    # The image already runs as an unprivileged user (uid 999).
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
